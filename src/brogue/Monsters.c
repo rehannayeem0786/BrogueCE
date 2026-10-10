@@ -4583,7 +4583,36 @@ void monsterDetails(char buf[], creature *monst) {
         itemName(rogue.armor, theItemName, false, false, NULL);
         sprintf(newText, "Your %s renders you immune to %s.\n     ", theItemName, monstName);
     } else if (monst->info.damage.upperBound * monsterDamageAdjustmentAmount(monst) / FP_FACTOR == 0) {
-        sprintf(newText, "%s deals no direct damage.\n     ", capMonstName);
+        // The monster has no melee attack. If it casts a bolt that deals direct
+        // damage (e.g. the flame turret's firebolt), report that damage instead;
+        // it is dealt with the same formula as a staff of that bolt at the
+        // bolt's magnitude (see the BE_DAMAGE case in updateBolt()).
+        const bolt *damageBolt = NULL;
+        for (i = 0; monst->info.bolts[i] != 0; i++) {
+            if (boltCatalog[monst->info.bolts[i]].boltEffect == BE_DAMAGE) {
+                damageBolt = &boltCatalog[monst->info.bolts[i]];
+                break;
+            }
+        }
+        if (damageBolt) {
+            short boltDamageLow = staffDamageLow(damageBolt->magnitude * FP_FACTOR);
+            short boltDamageHigh = staffDamageHigh(damageBolt->magnitude * FP_FACTOR);
+            short hitsToDefeat = (player.currentHP + boltDamageHigh - 1) / boltDamageHigh;
+
+            i = strlen(buf);
+            i = encodeMessageColor(buf, i, &badMessageColor);
+
+            sprintf(newText, "%s %s that hits for %i-%i damage, typically hits for %i%% of your current health, and at worst, could defeat you in %i hit%s.\n     ",
+                    capMonstName,
+                    damageBolt->description,
+                    boltDamageLow,
+                    boltDamageHigh,
+                    (int) (100 * (boltDamageLow + boltDamageHigh) / 2 / player.currentHP),
+                    hitsToDefeat,
+                    (hitsToDefeat > 1 ? "s" : ""));
+        } else {
+            sprintf(newText, "%s deals no direct damage.\n     ", capMonstName);
+        }
     } else {
         i = strlen(buf);
         i = encodeMessageColor(buf, i, &badMessageColor);
